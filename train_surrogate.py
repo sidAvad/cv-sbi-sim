@@ -132,7 +132,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--run",           required=True)
     p.add_argument("--sim-data-root", required=True)
-    p.add_argument("--n-sims",        type=int,   default=None)
+    p.add_argument("--n-sims",        type=int,   default=1_000_000)
     p.add_argument("--hidden",        type=int,   default=512)
     p.add_argument("--n-layers",      type=int,   default=4)
     p.add_argument("--max-epochs",    type=int,   default=300)
@@ -160,7 +160,7 @@ def main():
     stats    = load_stats(STATS_PATH)
     sim_root = Path(args.sim_data_root)
     manifest = load_manifest(sim_root / "manifest_train.json")
-    n_sims   = args.n_sims or len(manifest["index"])
+    n_sims   = min(args.n_sims, len(manifest["index"]))
     if run_type == "dry":
         n_sims = min(n_sims, 512)
         log("DRY RUN — capped at 512 sims")
