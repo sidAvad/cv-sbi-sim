@@ -61,6 +61,9 @@ OBS_DIM            = N_REDUCED_CHANNELS * T + N_SCALARS  # 809
 N_CONT             = len(WAVE_KEYS_CONT)            # 24
 N_VALVE            = len(WAVE_KEYS_VALVE)           # 4
 
+# PasHR observation: Pas waveform (201 pts) + HR scalar (1)
+OBS_DIM_PASHR = T + 1  # 202
+
 
 def compute_summary_stats(x: torch.Tensor) -> torch.Tensor:
     """
@@ -310,6 +313,58 @@ class PairedCVDataset(Dataset):
         x_reduced = torch.cat([waves_red.reshape(-1), scalars])            # (809,)
 
         return theta, x_full, x_reduced
+
+    def close(self):
+        for fh in self._handles.values():
+            fh.close()
+        self._handles.clear()
+
+
+class PasHRDataset(Dataset):
+    """
+    Returns (theta_infer, x_pashr) where:
+      theta_infer : (24,)  — all params except HR
+      x_pashr     : (202,) — z-scored Pas waveform (201 pts) + z-scored HR scalar (1)
+    """
+
+    def __init__(self, data_dir, index_entries, stats):
+        self.data_dir = data_dir
+        self.index    = index_entries
+        self._handles = {}
+
+        w = stats["waves"]
+        p = stats["parameters"]
+
+        self._pas_mean = w["Pas"]["mean"]
+        self._pas_std  = w["Pas"]["std"] + 1e-8
+        self._hr_mean  = p["HR"]["mean"]
+        self._hr_std   = p["HR"]["std"] + 1e-8
+
+    def __len__(self):
+        return len(self.index)
+
+    def __getitem__(self, idx):
+        entry = self.index[idx]
+        path  = os.path.join(self.data_dir, entry["file"])
+        if path not in self._handles:
+            self._handles[path] = h5py.File(path, "r")
+        g = self._handles[path][entry["group"]]
+
+        theta   = torch.tensor(
+            [float(g[f"parameters/{k}"][()]) for k in PARAM_KEYS],
+            dtype=torch.float32,
+        )
+        hr_raw      = theta[_HR_IDX].item()
+        theta_infer = torch.cat([theta[:_HR_IDX], theta[_HR_IDX + 1:]])  # (24,)
+
+        pas_raw = torch.from_numpy(g["waves/Pas"][:].astype(np.float32))
+        pas_z   = (pas_raw - self._pas_mean) / self._pas_std              # (201,)
+        hr_z    = torch.tensor(
+            (hr_raw - self._hr_mean) / self._hr_std, dtype=torch.float32
+        )
+
+        x = torch.cat([pas_z, hr_z.unsqueeze(0)])                        # (202,)
+        return theta_infer, x
 
     def close(self):
         for fh in self._handles.values():

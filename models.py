@@ -444,6 +444,58 @@ class VAEReducedAutoencoderEncoder(nn.Module):
         return z, mu, log_var
 
 
+# ── PasHR summary network ─────────────────────────────────────────────────────
+
+class PasHREncoder(nn.Module):
+    """1-ch Pas waveform CNN + HR scalar → latent_dim.
+
+    Mirrors ReducedAutoencoderEncoder but with 1 waveform channel and 1 scalar.
+    Used as summary network for Flow A (minimal cath input).
+    Input x: (B, T+1) — z-scored Pas waveform (T=201) concatenated with z-scored HR.
+    """
+
+    CONV_LAYERS = [
+        (1,   64,  7, 1),
+        (64,  128, 5, 2),
+        (128, 256, 5, 2),
+        (256, 256, 3, 1),
+    ]
+
+    def __init__(self, latent_dim: int = LATENT_DIM):
+        super().__init__()
+        self.latent_dim = latent_dim
+        feat_dim = self.CONV_LAYERS[-1][1]
+
+        layers = []
+        for in_ch, out_ch, k, s in self.CONV_LAYERS:
+            layers += [nn.Conv1d(in_ch, out_ch, kernel_size=k, padding=k // 2, stride=s), nn.SiLU()]
+        self.cnn      = nn.Sequential(*layers)
+        self.hr_proj  = nn.Linear(1, feat_dim)
+        self.attn_pool = nn.Linear(feat_dim, 1)
+        self.proj      = nn.Linear(feat_dim, latent_dim)
+
+    @property
+    def output_dim(self):
+        return self.latent_dim
+
+    def describe(self):
+        return {
+            "type": "PasHREncoder",
+            "input": f"Pas waveform ({T},) + HR scalar",
+            "latent_dim": self.latent_dim,
+            "n_params": sum(p.numel() for p in self.parameters()),
+        }
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        pas  = x[:, :-1].unsqueeze(1)          # (B, 1, T)
+        hr   = x[:, -1:]                        # (B, 1)
+        h    = self.cnn(pas).transpose(1, 2)    # (B, T', feat_dim)
+        hr_t = self.hr_proj(hr).unsqueeze(1)    # (B, 1, feat_dim)
+        h    = torch.cat([hr_t, h], dim=1)      # (B, T'+1, feat_dim)
+        w    = self.attn_pool(h).softmax(dim=1)
+        return self.proj((w * h).sum(dim=1))
+
+
 # ── Surrogate ─────────────────────────────────────────────────────────────────
 
 class SurrogateDecoder(nn.Module):
