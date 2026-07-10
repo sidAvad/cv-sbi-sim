@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+outputs/
+dry-runs/
+*.log
+.DS_Store
+nohup.out
+norm_stats.json
+mutagen.yml.lock

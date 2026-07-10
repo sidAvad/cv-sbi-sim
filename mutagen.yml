@@ -1,0 +1,33 @@
+sync:
+  cv-sbi-sim-adamant:
+    alpha: "."
+    beta: "sa4604@adamant:~/cv-sbi-sim"
+    mode: "two-way-resolved"
+    ignore:
+      paths:
+        - ".git"
+        - ".venv"
+        - "__pycache__"
+        - "*.pyc"
+        - "outputs/"
+        - "dry-runs/"
+        - "*.log"
+        - ".DS_Store"
+        - "nohup.out"
+        - "notebooks/"
+  cv-sbi-sim-mithril:
+    alpha: "."
+    beta: "sa4604@mithril:~/cv-sbi-sim"
+    mode: "two-way-resolved"
+    ignore:
+      paths:
+        - ".git"
+        - ".venv"
+        - "__pycache__"
+        - "*.pyc"
+        - "outputs/"
+        - "dry-runs/"
+        - "*.log"
+        - ".DS_Store"
+        - "nohup.out"
+        - "notebooks/"
