@@ -163,6 +163,7 @@ def main():
 
     log(f"Run: {args.run}  obs_type={args.obs_type}  device={args.device}")
     log(f"git: {git_hash()}")
+    log(f"cmd: {' '.join(sys.argv)}")
 
     device = args.device
     stats    = load_stats(STATS_PATH)
@@ -211,6 +212,41 @@ def main():
 
     opt_enc  = torch.optim.Adam(encoder.parameters(),  lr=args.lr_encoder)
     opt_flow = torch.optim.Adam(flow_net.parameters(), lr=args.lr_flow)
+
+    # ── Run info (written upfront so config is captured even if training crashes) ─
+    run_info = dict(
+        run=args.run,
+        type=run_type,
+        timestamp=datetime.now().isoformat(timespec="seconds"),
+        command=" ".join(sys.argv),
+        git_hash=git_hash(),
+        obs_type=args.obs_type,
+        device=args.device,
+        encoder=encoder.describe(),
+        flow=dict(
+            model="maf",
+            hidden_features=args.hidden_features,
+            num_transforms=args.num_transforms,
+            latent_dim=args.latent_dim,
+        ),
+        data=dict(
+            sim_data_root=args.sim_data_root,
+            n_sims=n_sims,
+            n_train=n_train,
+            n_val=n_val,
+        ),
+        training=dict(
+            lr_encoder=args.lr_encoder,
+            lr_flow=args.lr_flow,
+            batch_size=BATCH_SIZE,
+            max_epochs=args.max_epochs,
+            flow_warmup=args.flow_warmup,
+            patience=args.patience,
+        ),
+        best_val_nll=None,
+    )
+    with open(run_dir / "run_info.json", "w") as f:
+        json.dump(run_info, f, indent=2)
 
     # ── Training ──────────────────────────────────────────────────────────────
     csv_path = run_dir / f"train_log_{args.run}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
@@ -289,25 +325,11 @@ def main():
     log(f"Done. Best val NLL: {best_val:.4f}")
     log(f"Saved encoder.pt  flow_net.pt  to {run_dir}")
 
-    # ── Run info ──────────────────────────────────────────────────────────────
-    run_info = {
-        "run":            args.run,
-        "obs_type":       args.obs_type,
-        "git_hash":       git_hash(),
-        "n_sims":         n_sims,
-        "n_train":        n_train,
-        "n_val":          n_val,
-        "latent_dim":     args.latent_dim,
-        "hidden_features":args.hidden_features,
-        "num_transforms": args.num_transforms,
-        "max_epochs":     args.max_epochs,
-        "flow_warmup":    args.flow_warmup,
-        "patience":       args.patience,
-        "best_val_nll":   best_val,
-        "encoder":        encoder.describe(),
-    }
+    # ── Update run_info with final result ─────────────────────────────────────
+    run_info["best_val_nll"] = best_val
     with open(run_dir / "run_info.json", "w") as f:
         json.dump(run_info, f, indent=2)
+    log(f"run_info.json written  git={run_info['git_hash']}")
 
     csv_fh.close()
     log_fh.close()

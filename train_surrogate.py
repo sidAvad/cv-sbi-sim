@@ -155,6 +155,7 @@ def main():
 
     log(f"Run: {args.run}  device={args.device}")
     log(f"git: {git_hash()}")
+    log(f"cmd: {' '.join(sys.argv)}")
 
     device   = args.device
     stats    = load_stats(STATS_PATH)
@@ -201,6 +202,34 @@ def main():
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(
         opt, mode="min", factor=0.5, patience=10, min_lr=1e-5
     )
+
+    # ── Run info (written upfront so config is captured even if training crashes) ─
+    run_info = dict(
+        run=args.run,
+        type=run_type,
+        timestamp=datetime.now().isoformat(timespec="seconds"),
+        command=" ".join(sys.argv),
+        git_hash=git_hash(),
+        device=args.device,
+        model=model.describe(),
+        data=dict(
+            sim_data_root=args.sim_data_root,
+            n_sims=n_sims,
+            n_train=n_train,
+            n_val=n_val,
+        ),
+        training=dict(
+            lr=args.lr,
+            batch_size=args.batch_size,
+            max_epochs=args.max_epochs,
+            patience=args.patience,
+            lr_scheduler="ReduceLROnPlateau(factor=0.5, patience=10, min_lr=1e-5)",
+        ),
+        best_val_mse=None,
+        final_r2=None,
+    )
+    with open(run_dir / "run_info.json", "w") as f:
+        json.dump(run_info, f, indent=2)
 
     # ── Logging ───────────────────────────────────────────────────────────────
     csv_path = run_dir / f"train_log_{args.run}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
@@ -278,25 +307,13 @@ def main():
     with open(run_dir / "theta_norm.json", "w") as f:
         json.dump(theta_norm, f, indent=2)
 
-    run_info = {
-        "run":        args.run,
-        "git_hash":   git_hash(),
-        "n_sims":     n_sims,
-        "n_train":    n_train,
-        "n_val":      n_val,
-        "hidden":     args.hidden,
-        "n_layers":   args.n_layers,
-        "max_epochs": args.max_epochs,
-        "patience":   args.patience,
-        "lr":         args.lr,
-        "best_val_mse": best_val,
-        "final_r2":   dict(zip(WAVE_KEYS_CONT, r2.tolist())),
-        "model":      model.describe(),
-    }
+    run_info["best_val_mse"] = best_val
+    run_info["final_r2"]     = dict(zip(WAVE_KEYS_CONT, r2.tolist()))
     with open(run_dir / "run_info.json", "w") as f:
         json.dump(run_info, f, indent=2)
 
     log(f"Done. Best val MSE: {best_val:.6f}")
+    log(f"run_info.json written  git={run_info['git_hash']}")
     log(f"Saved decoder.pt  theta_norm.json  run_info.json  to {run_dir}")
 
     csv_fh.close()
