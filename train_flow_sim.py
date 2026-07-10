@@ -71,7 +71,11 @@ class Tee:
         self._fh.write(msg); self._stdout.write(msg)
 
     def flush(self):
-        self._fh.flush(); self._stdout.flush()
+        try:
+            self._fh.flush()
+        except ValueError:
+            pass
+        self._stdout.flush()
 
 
 def parse_run(name: str):
@@ -175,7 +179,7 @@ def main():
         args.obs_type, sim_root / "train", manifest, stats, n_sims, log
     )
 
-    n_val   = max(1024, int(len(theta_all) * VAL_FRAC))
+    n_val   = max(64, min(int(len(theta_all) * VAL_FRAC), 1024))
     n_train = len(theta_all) - n_val
     idx     = torch.randperm(len(theta_all))
     tr_idx, val_idx = idx[:n_train], idx[n_train:]
