@@ -50,16 +50,18 @@ Used to map posterior θ samples → predicted waveforms → derived quantities 
 
 ## Run naming convention
 
-`{type}-{obs_type}-v{version}`
+`{type}-v{version}_{encoder}_{flow}_{data}`
 
 - `type`: `exp` or `dry`
-- `obs_type`: `pas-hr`, `cath-lab`, `surrogate`
 - `v{version}`: integer or decimal
+- `encoder`: `enc-cathlab`, `enc-pashr`, `enc-surrogate`
+- `flow`: `maf5`, `nsf8`
+- `data`: `sims` (pure-sim runs in this repo always use sims)
 
 Examples:
-- `exp-cath-lab-v1`
-- `exp-pas-hr-v1`
-- `exp-surrogate-v1`
+- `exp-v1_enc-cathlab_maf5_sims`
+- `exp-v1_enc-pashr_maf5_sims`
+- `dry-v1_enc-cathlab_maf5_sims`
 
 ## Experiment tracking
 

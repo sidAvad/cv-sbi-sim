@@ -4,9 +4,9 @@
 
 | # | Model | Obs type | Run name | Status |
 |---|-------|----------|----------|--------|
-| S1 | Surrogate encoder + decoder | cath lab (all 24 cont. waves) | `exp-surrogate-v1` | pending |
-| A1 | Flow (NPE) | Pas waveform + HR | `exp-pas-hr-v1` | pending |
-| B1 | Flow (NPE) | cath lab (4 waves + 5 scalars) | `exp-cath-lab-v1` | pending |
+| S1 | Surrogate encoder + decoder | cath lab (all 24 cont. waves) | `exp-v1_enc-surrogate_maf5_sims` | pending |
+| A1 | Flow (NPE) | Pas waveform + HR | `exp-v1_enc-pashr_maf5_sims` | pending |
+| B1 | Flow (NPE) | cath lab (4 waves + 5 scalars) | `exp-v1_enc-cathlab_maf5_sims` | pending |
 
 ## Analysis
 
