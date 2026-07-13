@@ -496,6 +496,53 @@ class PasHREncoder(nn.Module):
         return self.proj((w * h).sum(dim=1))
 
 
+# ── Inverse encoder ───────────────────────────────────────────────────────────
+
+class InverseEncoder(nn.Module):
+    """24-ch continuous CNN → z-scored θ (N_PARAMS).
+
+    Paired with a frozen SurrogateDecoder to form a waveform→θ→waveform
+    autoencoder. Training loss is reconstruction MSE on output waveforms;
+    per-parameter R² at eval time reveals which parameters are identifiable
+    from the full set of 24 sim waveforms (theoretical ceiling).
+
+    Input:  flat z-scored waveforms (N_CONT * T,)
+    Output: z-scored theta (N_PARAMS,) — use theta_norm.json to convert to raw units
+    """
+
+    CONV_LAYERS = AutoencoderEncoder.CONV_LAYERS
+
+    def __init__(self, hidden_theta: int = 256):
+        super().__init__()
+        self.hidden_theta = hidden_theta
+        feat_dim = self.CONV_LAYERS[-1][1]
+
+        layers = []
+        for in_ch, out_ch, k, s in self.CONV_LAYERS:
+            layers += [nn.Conv1d(in_ch, out_ch, kernel_size=k, padding=k // 2, stride=s), nn.SiLU()]
+        self.cnn       = nn.Sequential(*layers)
+        self.attn_pool = nn.Linear(feat_dim, 1)
+        self.proj      = nn.Sequential(
+            nn.Linear(feat_dim, hidden_theta),
+            nn.SiLU(),
+            nn.Linear(hidden_theta, N_PARAMS),
+        )
+
+    def describe(self):
+        return {
+            "type": "InverseEncoder",
+            "input": f"({N_CONT}, {T})",
+            "output_dim": N_PARAMS,
+            "hidden_theta": self.hidden_theta,
+            "n_params": sum(p.numel() for p in self.parameters()),
+        }
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.cnn(x.view(-1, N_CONT, T)).transpose(1, 2)  # (B, T', feat_dim)
+        w = self.attn_pool(h).softmax(dim=1)
+        return self.proj((w * h).sum(dim=1))                  # (B, N_PARAMS)
+
+
 # ── Surrogate ─────────────────────────────────────────────────────────────────
 
 class SurrogateDecoder(nn.Module):

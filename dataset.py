@@ -98,6 +98,12 @@ def compute_summary_stats(x: torch.Tensor) -> torch.Tensor:
 
 
 class CVDataset(Dataset):
+    """24 z-scored continuous waveforms only — valve signals excluded.
+
+    Returns (theta_25, x) where x is (N_CONT * T,) = (4824,).
+    Use with AutoencoderEncoder (24-ch CNN).
+    """
+
     def __init__(self, data_dir, index_entries, stats):
         self.data_dir = data_dir
         self.index = index_entries
@@ -106,7 +112,7 @@ class CVDataset(Dataset):
         w = stats["waves"]
         self.wave_mean = torch.tensor(
             [w[k]["mean"] for k in WAVE_KEYS_CONT], dtype=torch.float32
-        ).unsqueeze(1)  # (24, 1) — broadcasts over (24, 201)
+        ).unsqueeze(1)
         self.wave_std = torch.tensor(
             [w[k]["std"] for k in WAVE_KEYS_CONT], dtype=torch.float32
         ).unsqueeze(1)
@@ -121,27 +127,15 @@ class CVDataset(Dataset):
             self._handles[path] = h5py.File(path, "r")
         g = self._handles[path][entry["group"]]
 
-        # theta: raw parameter values, shape (25,)
         theta = torch.tensor(
             [float(g[f"parameters/{k}"][()]) for k in PARAM_KEYS],
             dtype=torch.float32,
         )
-
-        # continuous waveforms: z-scored, shape (24, 201)
         waves_cont = torch.from_numpy(
             np.stack([g[f"waves/{k}"][:] for k in WAVE_KEYS_CONT]).astype(np.float32)
         )
         waves_cont = (waves_cont - self.wave_mean) / (self.wave_std + 1e-8)
-
-        # valve waveforms: binary float as-is, shape (4, 201)
-        waves_valve = torch.from_numpy(
-            np.stack([g[f"waves/{k}"][:] for k in WAVE_KEYS_VALVE]).astype(np.float32)
-        )
-
-        # x: all 28 channels stacked flat → (28*201,) for sbi
-        x = torch.cat([waves_cont, waves_valve], dim=0).reshape(-1)
-
-        return theta, x
+        return theta, waves_cont.reshape(-1)  # (N_CONT * T,) = (4824,)
 
     def close(self):
         for fh in self._handles.values():

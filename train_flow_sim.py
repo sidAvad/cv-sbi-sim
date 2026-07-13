@@ -2,8 +2,9 @@
 Train a pure-sim NPE flow for identifiability analysis.
 
 Observation types:
-  pas_hr   : Pas waveform (201 pts, z-scored) + HR scalar → 202-dim
-  cath_lab : 4 pressure waveforms (Prv/Pra/Pvp/Pap) + 5 scalars → 809-dim
+  pas_hr    : Pas waveform (201 pts, z-scored) + HR scalar → 202-dim
+  cath_lab  : 4 pressure waveforms (Prv/Pra/Pvp/Pap) + 5 scalars → 809-dim
+  all_waves : all 24 continuous sim waveforms (z-scored) → 4824-dim (theoretical ceiling)
 
 Encoder and flow are trained jointly from NLL loss on sims only.
 Optional --flow-warmup freezes encoder for initial epochs.
@@ -40,10 +41,10 @@ from sbi.neural_nets import posterior_nn
 
 from dataset import (
     load_stats, load_manifest,
-    ReducedCVDataset, PasHRDataset,
+    CVDataset, ReducedCVDataset, PasHRDataset,
     PARAM_KEYS_INFER,
 )
-from models import ReducedAutoencoderEncoder, PasHREncoder
+from models import AutoencoderEncoder, ReducedAutoencoderEncoder, PasHREncoder
 
 STATS_PATH     = Path("norm_stats.json")
 N_PARAMS_INFER = len(PARAM_KEYS_INFER)  # 24
@@ -94,6 +95,8 @@ def load_sim_data(obs_type: str, data_dir: Path, manifest: dict,
     index = manifest["index"][:n]
     if obs_type == "cath_lab":
         ds = ReducedCVDataset(str(data_dir), index, stats)
+    elif obs_type == "all_waves":
+        ds = CVDataset(str(data_dir), index, stats)
     else:
         ds = PasHRDataset(str(data_dir), index, stats)
 
@@ -134,7 +137,7 @@ def build_flow(latent_dim: int, theta_sample: torch.Tensor,
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--run",            required=True)
-    p.add_argument("--obs-type",       required=True, choices=["pas_hr", "cath_lab"])
+    p.add_argument("--obs-type",       required=True, choices=["pas_hr", "cath_lab", "all_waves"])
     p.add_argument("--sim-data-root",  required=True)
     p.add_argument("--n-sims",         type=int,   default=None,
                    help="Number of sims to use (default: all in manifest)")
@@ -197,6 +200,8 @@ def main():
     # ── Models ────────────────────────────────────────────────────────────────
     if args.obs_type == "cath_lab":
         encoder = ReducedAutoencoderEncoder(latent_dim=args.latent_dim).to(device)
+    elif args.obs_type == "all_waves":
+        encoder = AutoencoderEncoder(latent_dim=args.latent_dim).to(device)
     else:
         encoder = PasHREncoder(latent_dim=args.latent_dim).to(device)
 
