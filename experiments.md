@@ -7,7 +7,7 @@
 | MLP surrogate decoder (θ→waves) | all 25 params → 24 cont. waveforms | `exp-v1_mlp-surrogate_sims` | done |
 | Flow (NPE) | Pas waveform + HR | `exp-v1_enc-pashr_maf5_sims` | done — best val NLL=+22.41 (early stop ep190/600) |
 | Flow (NPE) | cath lab (4 waves + 5 scalars) | `exp-v1_enc-cathlab_maf5_sims` | done — best val NLL=−18.54 (early stop ep380/600) |
-| Flow (NPE) | all 24 continuous sim waveforms | `exp-v1_enc-allwaves_maf5_sims` | pending |
+| Flow (NPE) | all 24 continuous sim waveforms | `exp-v1_enc-allwaves_maf5_sims` | done — best val NLL=−38.74 (early stop ep205/600) |
 
 ## Results
 
@@ -110,9 +110,19 @@ NLL gap between the two flows: **~41 nats** (quantifies information value of rig
 Pas+HR gives tighter SV because it observes the full Pas waveform (201 pts) while cath lab compresses
 Pas to 3 scalars (mean/max/min), losing pulse-pressure shape information that directly encodes SV.
 
+## `exp-v1_enc-allwaves_maf5_sims` — Flow (all 24 waveforms)
+
+1M sims, early stop ep205/600. Best val NLL: **−38.74 nats**.
+
+Note: initial run used a buggy `CVDataset` that returned 25-dim theta (including HR); re-run after
+fix to return 24-dim `theta_infer` (HR excluded, consistent with other datasets). NLL improved from
+−29.48 → −38.74, confirming the theta-dim mismatch was materially degrading the flow.
+
+All 24 continuous sim waveforms (volumes, pressures, flows) provide the theoretical identifiability
+ceiling — parameters structurally unidentifiable here cannot be recovered from any waveform-based
+observation type in this model family. NLL gap vs cath lab: ~20 nats; vs Pas+HR: ~61 nats.
+
 ## Next
 
-- `exp-v1_enc-allwaves_maf5_sims`: all 24 continuous sim waveforms → `AutoencoderEncoder` → MAF5 flow.
-  Establishes theoretical identifiability ceiling — parameters unidentifiable here are structurally
-  unidentifiable given this model, not just poorly observed.
-  Run: `python train_flow_sim.py --run exp-v1_enc-allwaves_maf5_sims --obs-type all_waves --sim-data-root /media/local/SimData/hdf5/cv8/simset_10M_cv8Eed_20260314 --n-sims 1000000 --max-epochs 600 --patience 20`
+- Run 3-way identifiability notebook (`notebooks/identifiability_cathlab_vs_pashr.ipynb`) to compare
+  posterior widths and R² across all three obs types using the corrected allwaves checkpoint.
