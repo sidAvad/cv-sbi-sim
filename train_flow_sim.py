@@ -41,7 +41,7 @@ from sbi.neural_nets import posterior_nn
 
 from dataset import (
     load_stats, load_manifest,
-    CVDataset, ReducedCVDataset, PasHRDataset,
+    CVDataset, CVDatasetHR, ReducedCVDataset, PasHRDataset,
     PARAM_KEYS_INFER,
 )
 from models import AutoencoderEncoder, ReducedAutoencoderEncoder, PasHREncoder

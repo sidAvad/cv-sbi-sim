@@ -1,11 +1,15 @@
 """
 PyTorch Dataset for SBI over cardiovascular physiology.
 
-Two dataset modes:
-- CVDataset: all 28 waveforms (24 continuous z-scored + 4 binary valves),
-  25-param theta. Used for the full-channel CNN baseline.
+Dataset classes:
+- CVDataset: 24 z-scored continuous waveforms, 24-param theta (HR excluded).
+  Use with AutoencoderEncoder (24-ch CNN). All-waveform identifiability ceiling.
+- CVDatasetHR: same waveforms, but returns 25-param theta (HR included).
+  Use when HR itself is a target parameter.
 - ReducedCVDataset: 4 pressure waveforms + 5 scalars (Pas mean/max/min, SV,
   HR), 24-param theta (HR moved to observation). Used for the reduced-input CNN.
+- PasHRDataset: Pas waveform + HR scalar, 24-param theta (HR excluded).
+- SurrogateDataset: 25-param theta + 24 z-scored waveforms for surrogate training.
 """
 
 import json
@@ -100,8 +104,59 @@ def compute_summary_stats(x: torch.Tensor) -> torch.Tensor:
 class CVDataset(Dataset):
     """24 z-scored continuous waveforms only — valve signals excluded.
 
-    Returns (theta_25, x) where x is (N_CONT * T,) = (4824,).
+    Returns (theta_infer, x) where:
+      theta_infer : (24,)    — all params except HR (consistent with other datasets)
+      x           : (4824,)  — N_CONT * T z-scored continuous waveforms
     Use with AutoencoderEncoder (24-ch CNN).
+    """
+
+    def __init__(self, data_dir, index_entries, stats):
+        self.data_dir = data_dir
+        self.index = index_entries
+        self._handles = {}
+
+        w = stats["waves"]
+        self.wave_mean = torch.tensor(
+            [w[k]["mean"] for k in WAVE_KEYS_CONT], dtype=torch.float32
+        ).unsqueeze(1)
+        self.wave_std = torch.tensor(
+            [w[k]["std"] for k in WAVE_KEYS_CONT], dtype=torch.float32
+        ).unsqueeze(1)
+
+    def __len__(self):
+        return len(self.index)
+
+    def __getitem__(self, idx):
+        entry = self.index[idx]
+        path = os.path.join(self.data_dir, entry["file"])
+        if path not in self._handles:
+            self._handles[path] = h5py.File(path, "r")
+        g = self._handles[path][entry["group"]]
+
+        theta = torch.tensor(
+            [float(g[f"parameters/{k}"][()]) for k in PARAM_KEYS],
+            dtype=torch.float32,
+        )
+        theta_infer = torch.cat([theta[:_HR_IDX], theta[_HR_IDX + 1:]])  # (24,)
+        waves_cont = torch.from_numpy(
+            np.stack([g[f"waves/{k}"][:] for k in WAVE_KEYS_CONT]).astype(np.float32)
+        )
+        waves_cont = (waves_cont - self.wave_mean) / (self.wave_std + 1e-8)
+        return theta_infer, waves_cont.reshape(-1)  # (N_CONT * T,) = (4824,)
+
+    def close(self):
+        for fh in self._handles.values():
+            fh.close()
+        self._handles.clear()
+
+
+class CVDatasetHR(Dataset):
+    """24 z-scored continuous waveforms, returning all 25 params including HR.
+
+    Returns (theta_25, x) where:
+      theta_25 : (25,)   — all params including HR
+      x        : (4824,) — N_CONT * T z-scored continuous waveforms
+    Use when HR itself is a target parameter (e.g. infering HR from waveforms).
     """
 
     def __init__(self, data_dir, index_entries, stats):
