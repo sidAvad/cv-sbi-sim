@@ -172,10 +172,11 @@ class ReducedAutoencoderEncoder(nn.Module):
         (256,                256, 3, 1),
     ]
 
-    def __init__(self, latent_dim=LATENT_DIM, proj_hidden=None):
+    def __init__(self, latent_dim=LATENT_DIM, proj_hidden=None, n_scalars=N_SCALARS):
         super().__init__()
         self.latent_dim  = latent_dim
         self.proj_hidden = proj_hidden
+        self.n_scalars   = n_scalars
         self.wave_len    = N_REDUCED_CHANNELS * T
         feat_dim = self.CONV_LAYERS[-1][1]
 
@@ -183,7 +184,7 @@ class ReducedAutoencoderEncoder(nn.Module):
         for in_ch, out_ch, k, s in self.CONV_LAYERS:
             layers += [nn.Conv1d(in_ch, out_ch, kernel_size=k, padding=k // 2, stride=s), nn.SiLU()]
         self.cnn          = nn.Sequential(*layers)
-        self.scalar_projs = nn.ModuleList([nn.Linear(1, feat_dim) for _ in range(N_SCALARS)])
+        self.scalar_projs = nn.ModuleList([nn.Linear(1, feat_dim) for _ in range(n_scalars)])
         self.attn_pool    = nn.Linear(feat_dim, 1)
 
         if proj_hidden is not None:
@@ -198,10 +199,12 @@ class ReducedAutoencoderEncoder(nn.Module):
         return self.latent_dim
 
     def describe(self):
+        scalars_str = ("Pas_mean, Pas_max, Pas_min, HR_z" if self.n_scalars == 4
+                       else "Pas_mean, Pas_max, Pas_min, SV, HR_z")
         return {
             "type": "ReducedAutoencoderEncoder",
             "input_waveforms": f"({N_REDUCED_CHANNELS}, {T})",
-            "input_scalars": "Pas_mean, Pas_max, Pas_min, SV, HR_z",
+            "input_scalars": scalars_str,
             "latent_dim": self.latent_dim,
             "proj_hidden": self.proj_hidden,
             "n_params": sum(p.numel() for p in self.parameters()),

@@ -7,6 +7,7 @@
 | MLP surrogate decoder (θ→waves) | all 25 params → 24 cont. waveforms | `exp-v1_mlp-surrogate_sims` | done |
 | Flow (NPE) | Pas waveform + HR | `exp-v1_enc-pashr_maf5_sims` | done — best val NLL=+22.41 (early stop ep190/600) |
 | Flow (NPE) | cath lab (4 waves + 5 scalars) | `exp-v1_enc-cathlab_maf5_sims` | done — best val NLL=−18.54 (early stop ep380/600) |
+| Flow (NPE) | cath lab, no SV (4 waves + 4 scalars, 808-dim) | `exp-v1.1_enc-cathlab_maf5_sims` | queued — ablation: how much does SV scalar contribute? |
 | Flow (NPE) | all 24 continuous sim waveforms | `exp-v1_enc-allwaves_maf5_sims` | done — best val NLL=−38.74 (early stop ep205/600) |
 
 ## Results
@@ -124,5 +125,6 @@ observation type in this model family. NLL gap vs cath lab: ~20 nats; vs Pas+HR:
 
 ## Next
 
+- Run `exp-v1.1_enc-cathlab_maf5_sims` with `--no-sv` to ablate the SV scalar contribution.
 - Run 3-way identifiability notebook (`notebooks/identifiability_cathlab_vs_pashr.ipynb`) to compare
   posterior widths and R² across all three obs types using the corrected allwaves checkpoint.

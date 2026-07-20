@@ -3,7 +3,7 @@ Train a pure-sim NPE flow for identifiability analysis.
 
 Observation types:
   pas_hr    : Pas waveform (201 pts, z-scored) + HR scalar → 202-dim
-  cath_lab  : 4 pressure waveforms (Prv/Pra/Pvp/Pap) + 5 scalars → 809-dim
+  cath_lab  : 4 pressure waveforms (Prv/Pra/Pvp/Pap) + 5 scalars → 809-dim (808-dim with --no-sv)
   all_waves : all 24 continuous sim waveforms (z-scored) → 4824-dim (theoretical ceiling)
 
 Encoder and flow are trained jointly from NLL loss on sims only.
@@ -91,10 +91,11 @@ def parse_run(name: str):
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 def load_sim_data(obs_type: str, data_dir: Path, manifest: dict,
-                  stats: dict, n: int, log) -> tuple[torch.Tensor, torch.Tensor]:
+                  stats: dict, n: int, log,
+                  include_sv: bool = True) -> tuple[torch.Tensor, torch.Tensor]:
     index = manifest["index"][:n]
     if obs_type == "cath_lab":
-        ds = ReducedCVDataset(str(data_dir), index, stats)
+        ds = ReducedCVDataset(str(data_dir), index, stats, include_sv=include_sv)
     elif obs_type == "all_waves":
         ds = CVDataset(str(data_dir), index, stats)
     else:
@@ -151,6 +152,8 @@ def main():
     p.add_argument("--lr-encoder",     type=float, default=5e-4)
     p.add_argument("--lr-flow",        type=float, default=5e-4)
     p.add_argument("--device",         default=DEVICE)
+    p.add_argument("--no-sv",          action="store_true",
+                   help="Drop SV scalar from cath_lab observation (808-dim instead of 809-dim)")
     args = p.parse_args()
 
     run_type, run_dir = parse_run(args.run)
@@ -178,9 +181,11 @@ def main():
         log("DRY RUN — capped at 512 sims")
 
     # ── Load data ─────────────────────────────────────────────────────────────
+    include_sv = not args.no_sv
     log(f"Loading {n_sims} sims ({args.obs_type})...")
     theta_all, x_all = load_sim_data(
-        args.obs_type, sim_root / "train", manifest, stats, n_sims, log
+        args.obs_type, sim_root / "train", manifest, stats, n_sims, log,
+        include_sv=include_sv,
     )
 
     n_val   = max(64, min(int(len(theta_all) * VAL_FRAC), 1024))
@@ -199,7 +204,10 @@ def main():
 
     # ── Models ────────────────────────────────────────────────────────────────
     if args.obs_type == "cath_lab":
-        encoder = ReducedAutoencoderEncoder(latent_dim=args.latent_dim).to(device)
+        encoder = ReducedAutoencoderEncoder(
+            latent_dim=args.latent_dim,
+            n_scalars=4 if args.no_sv else 5,
+        ).to(device)
     elif args.obs_type == "all_waves":
         encoder = AutoencoderEncoder(latent_dim=args.latent_dim).to(device)
     else:
@@ -226,6 +234,7 @@ def main():
         command=" ".join(sys.argv),
         git_hash=git_hash(),
         obs_type=args.obs_type,
+        no_sv=args.no_sv,
         device=args.device,
         encoder=encoder.describe(),
         flow=dict(
